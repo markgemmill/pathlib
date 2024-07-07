@@ -1,0 +1,13 @@
+# https://taskfile.dev
+
+version: '3'
+
+vars:
+  VERSION:
+    sh: dover
+
+tasks:
+
+  default:
+    cmds:
+      - echo "We need some tasks"

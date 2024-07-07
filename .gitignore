@@ -1,0 +1,7 @@
+.idea
+bin
+dist
+*.sh
+workbench
+cover.out
+.DS_Store
