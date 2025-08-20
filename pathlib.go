@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
 
-const version = "0.1.0"
+const version = "0.1.1"
 
 type jsonPathInfo struct {
 	Path     string      `json:"path"`
@@ -29,10 +31,27 @@ func NewPath(path string, fileMode os.FileMode) Path {
 		path:     path,
 		fileMode: fileMode,
 	}
-
 }
 
-func NewTempDir(paths ...string) (Path, error) {
+func Home() Path {
+	pth, err := os.UserHomeDir()
+	home := NewPath(pth, PRIVATE_DIR)
+	if err != nil {
+		home.err = err
+	}
+	return home
+}
+
+func Check(paths ...Path) error {
+	for _, pth := range paths {
+		if pth.err != nil {
+			return pth.err
+		}
+	}
+	return nil
+}
+
+func NewTempDir(namePattern string) (Path, error) {
 	dir, err := os.UserHomeDir()
 	if err != nil {
 		return Path{}, err
@@ -50,13 +69,12 @@ func NewTempDir(paths ...string) (Path, error) {
 		return Path{}, err
 	}
 
-	newTmpDir, err := os.MkdirTemp(tmpDir.String(), "*")
+	newTmpDir, err := os.MkdirTemp(tmpDir.String(), namePattern)
 	if err != nil {
 		return Path{}, err
 	}
 
 	tmpdir := NewPath(newTmpDir, fileInfo.Mode())
-	tmpdir = tmpdir.Join(paths...)
 
 	err = tmpdir.MkDirs()
 	if err != nil {
@@ -64,6 +82,66 @@ func NewTempDir(paths ...string) (Path, error) {
 	}
 
 	return tmpdir, nil
+}
+
+func (pth Path) SetFileMode(mode os.FileMode) Path {
+	p := NewPath(pth.path, mode)
+	p.err = pth.err
+	return p
+}
+
+func (pth Path) Owner() (*user.User, error) {
+	return GetOwner(pth.String())
+}
+
+func (pth Path) Chown(usr *user.User) error {
+	uid, err := strconv.Atoi(usr.Uid)
+	if err != nil {
+		return err
+	}
+
+	gid, err := strconv.Atoi(usr.Gid)
+	if err != nil {
+		return err
+	}
+
+	// change ownership of html dir to caddy
+	err = os.Chown(pth.String(), uid, gid)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (pth Path) ChownTree(usr *user.User) error {
+	var err error
+	if pth.IsFile() {
+		err = pth.Chown(usr)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	err = pth.Chown(usr)
+	if err != nil {
+		return err
+	}
+
+	content, err := pth.ReadDir()
+	if err != nil {
+		return err
+	}
+
+	for _, path := range content {
+		err = path.ChownTree(usr)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (pth Path) Copy() Path {
@@ -141,6 +219,18 @@ func (pth Path) Resolve() Path {
 	if pth.HasError() {
 		return pth
 	}
+	// resolve ~
+	if strings.HasPrefix(pth.path, "~") {
+		home := Home()
+		newPath := strings.TrimLeft(pth.path, "~")
+		newPath = strings.TrimLeft(newPath, string(filepath.Separator))
+
+		fullPath := home.Join(newPath)
+		fullPath.SetFileMode(pth.fileMode)
+
+		return fullPath
+	}
+
 	absPth, err := filepath.Abs(pth.path)
 	if err != nil {
 		pth.err = err
@@ -238,6 +328,10 @@ func (pth Path) Write(data []byte) error {
 	return os.WriteFile(pth.path, data, pth.fileMode)
 }
 
+func (pth Path) Touch() error {
+	return os.WriteFile(pth.path, []byte(""), pth.fileMode)
+}
+
 func (pth Path) Open() (*os.File, error) {
 	if pth.Exists() {
 		return os.Open(pth.String())
@@ -270,7 +364,6 @@ func (pth Path) ModTime() (time.Time, error) {
 }
 
 func (pth Path) RelativeTo(oth Path) (Path, error) {
-
 	relativePth, found := strings.CutPrefix(pth.String(), oth.String())
 	if !found {
 		return pth, fmt.Errorf("%s is not relative to %s", pth.String(), oth.String())
