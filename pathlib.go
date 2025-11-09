@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-const version = "0.1.1"
+const version = "0.2.0-dev.0"
 
 type jsonPathInfo struct {
 	Path     string      `json:"path"`
