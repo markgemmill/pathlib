@@ -3,7 +3,10 @@ bin
 dist
 *.sh
 workbench
+wrkbnch
 cover.out
 .DS_Store
 CLAUDE.md
 QUICK_REFERENCE.md
+TODO.md
+.coverage

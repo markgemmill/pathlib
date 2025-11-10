@@ -8,6 +8,6 @@ vars:
 
 tasks:
 
-  default:
+  test:
     cmds:
-      - echo "We need some tasks"
+      - gotestsum -f testname -- ./ -cover -coverprofile .coverage
