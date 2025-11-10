@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-const version = "0.2.0-dev.0"
+const version = "0.2.0-dev.1"
 
 type jsonPathInfo struct {
 	Path     string      `json:"path"`
